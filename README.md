@@ -1,35 +1,35 @@
 # FedCAFE
 
-异构大语言模型联邦微调框架：客户端持有不同架构的模型（OPT / GPT-2），通过 LoRA + 跨注意力 Adapter 与服务器交换特征，在不共享本地数据的前提下完成双向知识蒸馏微调。
+A federated fine-tuning framework for heterogeneous large language models: clients hold models of different architectures (OPT / GPT-2), exchange features with the server through LoRA plus cross-attention adapters, and complete bidirectional knowledge distillation fine-tuning without sharing any local data.
 
-## 环境依赖
+## Requirements
 
-Python 3.9 及以上。
+Python 3.9 or later.
 
 ```bash
 pip install torch transformers peft datasets fire tqdm numpy pandas
 ```
 
-## 数据准备
+## Data Preparation
 
-原始数据集为 [alpaca_data](https://huggingface.co/datasets/tatsu-lab/alpaca)（23 MB）、[databricks-dolly-15k](https://huggingface.co/datasets/databricks/databricks-dolly-15k)（13 MB）和 MMLU 测试集，已随仓库提供，无需下载。
+The raw datasets are [alpaca_data](https://huggingface.co/datasets/tatsu-lab/alpaca) (23 MB), [databricks-dolly-15k](https://huggingface.co/datasets/databricks/databricks-dolly-15k) (13 MB), and the MMLU test set. They are already included in this repository, so no download is needed.
 
 ```bash
-python client_data_allocation_dolly.py   # 生成全局测试集、全局训练集与 5 份客户端划分,其中一份作为公共数据集public_training.json
-python sample_public_subset.py           # 从 public_training.json 采样共享数据
+python client_data_allocation_dolly.py   # generate the global test set, the global training set, and 5 client partitions, one of which serves as the public dataset public_training.json
+python sample_public_subset.py           # sample the shared data from public_training.json
 ```
 
-**关于 `num_clients`**：划分脚本中设为 `5`，是为了额外生成一份**共享数据集**。因此划分脚本用 5 个客户端，而实际实验用 4 个。共享数据供服务器全局训练与客户端 Adapter 训练使用，仓库中已按上述方式提供对应文件。
+**Note on `num_clients`**: the partitioning script sets it to `5` in order to produce one extra **shared dataset**. The partitioning script therefore works with 5 clients, while the actual experiments use 4. The shared data is used for the server's global training and for client adapter training, and the corresponding files are provided in this repository as described above.
 
-## 运行
+## Usage
 
-先按上一步生成数据，并配置好基础模型（默认路径需按本机情况修改）：
+Generate the data as described above and configure the base models (the default paths must be adapted to your own machine):
 
-| 参数 | 默认值 | 说明 |
+| Argument | Default | Description |
 | --- | --- | --- |
-| `llama_path` | Llama-2-7b-hf | 服务器基座模型 |
-| `opt_model_path` | opt-1.3b | OPT 客户端模型 |
-| `model_path` | gpt2-xl | GPT-2 客户端模型 |
+| `llama_path` | Llama-2-7b-hf | Server base model |
+| `opt_model_path` | opt-1.3b | OPT client model |
+| `model_path` | gpt2-xl | GPT-2 client model |
 
 ```bash
 python heter_main.py \
@@ -39,12 +39,12 @@ python heter_main.py \
   --data_path ./data
 ```
 
-`num_clients=4` 且 `num_opt_clients=4` 表示 4 个客户端均为 OPT 模型；若设为 2，则 2 个 OPT + 2 个 GPT-2。训练产物保存在 `Heter-gpt2-dolly-homo/4/`（下划线分隔的客户端输出与 `server_output/`）下。
+`num_clients=4` together with `num_opt_clients=4` means that all 4 clients are OPT models; setting it to `2` gives 2 OPT plus 2 GPT-2 clients. Training artifacts are written to `Heter-gpt2-dolly-homo/4/` (the per-client outputs, separated by underscores, and `server_output/`).
 
-每轮通信依次为：客户端本地自训练 → 客户端 Adapter 训练并聚合 → 服务器全局训练 → 服务器蒸馏回客户端。
+Each communication round proceeds as follows: local client self-training → client adapter training and aggregation → server global training → server distillation back to the clients.
 
-## 说明
+## Notes
 
-- `heter_main.py` 中的模型路径默认写在脚本里，运行前请改为自己的本地路径。
-- 仓库已包含划分好的 `data/4` 与 `data/8`，可直接开始训练，无需重新生成。
-- 本仓库目前未附开源许可证。
+- The model paths in `heter_main.py` are hard-coded defaults; change them to your own local paths before running.
+- The repository already contains the partitioned `data/4` and `data/8`, so training can start directly without regenerating them.
+- This repository currently ships without an open-source license.
