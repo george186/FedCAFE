@@ -17,7 +17,6 @@ with open(input_file, 'r', encoding='utf-8') as f:
 
 print(f"原始数据集总样本数: {len(data)}")
 
-# 按类别分组
 grouped = defaultdict(list)
 for item in data:
     grouped[item['category']].append(item)
@@ -28,18 +27,15 @@ print(f"类别数: {num_categories}")
 for cat in categories:
     print(f"  {cat}: {len(grouped[cat])}")
 
-# 确定每个类别的最终采样数：不足的全取，剩余份额分配给有余量的类别
 available = {cat: len(grouped[cat]) for cat in categories}
 targets = {}
 remaining_quota = target_size
 
-# 第一轮：按均匀分配计算理想数量
 base_per_cat = target_size // num_categories
 remainder = target_size % num_categories
 for i, cat in enumerate(categories):
     targets[cat] = base_per_cat + (1 if i < remainder else 0)
 
-# 迭代处理不足和剩余分配
 while True:
     shortfall = 0
     surplus_cats = []
@@ -56,7 +52,6 @@ while True:
     if shortfall == 0 or total_surplus == 0:
         break
 
-    # 将不足的份额按剩余容量比例分配给有余量的类别
     for cat in surplus_cats:
         surplus = available[cat] - targets[cat]
         extra = int(shortfall * surplus / total_surplus)
@@ -64,7 +59,6 @@ while True:
         shortfall -= extra
         total_surplus -= surplus
 
-    # 如果还有除不尽的余数，逐个分配
     if shortfall > 0 and surplus_cats:
         surplus_cats.sort(key=lambda c: available[c] - targets[c], reverse=True)
         for cat in surplus_cats:
@@ -74,7 +68,6 @@ while True:
                 targets[cat] += 1
                 shortfall -= 1
 
-# 采样
 sampled = []
 distribution = {}
 

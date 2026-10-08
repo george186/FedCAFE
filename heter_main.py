@@ -128,7 +128,6 @@ def fl_finetune(
 
     acc_list = []
             
-    # 准备服务器llama模型
     print("\nInitializing Llama...")
     server = GeneralServer(llama_path, output_dir, config_server, opt_model_path, model_path)
     print("\nPreparing the public dataset and trainer for Server")
@@ -138,7 +137,6 @@ def fl_finetune(
 
     clients = []
 
-    # 准备client模型
     print("\nConducting the client selection and initializing client")
     selected_clients_set = client_selection(num_clients, client_selection_frac, client_selection_strategy,
                                                 other_info=1)
@@ -151,7 +149,6 @@ def fl_finetune(
             clients.append(GeneralClient(client_id, model_path, output_dir, config_client_gpt2, 4096, model_type="gpt2"))
 
 
-    # 联邦学习循环
     for epoch in tqdm(range(num_communication_rounds)):
 
         # step 1：客户端本地自训练
@@ -162,7 +159,6 @@ def fl_finetune(
             private_dataset = DollyDataset(local_data_path)
 
             print("\nLocal attention training starts ... ")
-            # 加载状态 (如果是第一轮则跳过加载)
             if epoch > 0: 
                 client.load_state()
             client.to_gpu()
@@ -183,7 +179,6 @@ def fl_finetune(
             client.unload() 
         
         # step 2：客户端Adapter训练
-        # Server 此时不需要加载 LoRA (作为 Teacher 冻结状态)，或者加载上一轮的
         if epoch > 0: 
             server.load_state() 
         server.to_gpu()
@@ -192,7 +187,6 @@ def fl_finetune(
             client.load_state()
             client.to_gpu()
             
-            # 训练 Adapter
             client.train_adapter(dataset=public_dataset, 
                                  batch_size=local_micro_batch_size, 
                                  epochs=1,
@@ -203,7 +197,7 @@ def fl_finetune(
             
             client.save_state()
             client.merge_model()
-            client.unload() # Client 下线
+            client.unload() 
         
         aggregate_adapters(clients)
 
@@ -229,7 +223,7 @@ def fl_finetune(
                                       epochs=local_num_epochs,
                                       learn_rate=local_learning_rate,
                                       temp_kl=3.0,
-                                      clients=[client]) # 列表里只有一个
+                                      clients=[client])
             
             client.save_state()
             client.merge_model()

@@ -37,7 +37,6 @@ sampled_df_dic = sampled_df.to_dict(orient='records')
 with open(os.path.join(data_path, "global_test.json"), 'w') as outfile:
     json.dump(sampled_df_dic, outfile)
 
-# ============ 新增：验证和统计类别分布 ============
 print("原始数据类别分布:")
 print(remaining_df['category'].value_counts())
 print(f"\n总样本数: {len(remaining_df)}")
@@ -73,38 +72,28 @@ if diff_quantity:
 
 
 else:
-    # ============ 修改这里：实现类别均匀分配 ============
     print("使用类别均匀分配策略...")
     
-    # 获取所有类别
     categories = remaining_df['category'].unique()
     
-    # 为每个客户端创建空列表
     client_indices = [[] for _ in range(num_clients)]
     client_category_counts = [defaultdict(int) for _ in range(num_clients)]
     
-    # 对每个类别进行均匀分配
     for category in categories:
-        # 获取该类别的所有索引
         cat_indices = remaining_df[remaining_df['category'] == category].index.tolist()
-        np.random.shuffle(cat_indices)  # 随机打乱
+        np.random.shuffle(cat_indices)  
         
-        # 计算每个客户端应该获得的该类样本数量
         total_cat_samples = len(cat_indices)
         base_samples_per_client = total_cat_samples // num_clients
         remainder = total_cat_samples % num_clients
         
-        # 分配基础数量
         start_idx = 0
         for client_id in range(num_clients):
-            # 每个客户端的基础样本数
             end_idx = start_idx + base_samples_per_client
             
-            # 如果有余数，前remainder个客户端各多分一个
             if remainder > 0 and client_id < remainder:
                 end_idx += 1
             
-            # 分配索引
             if start_idx < len(cat_indices):
                 client_indices[client_id].extend(cat_indices[start_idx:end_idx])
                 client_category_counts[client_id][category] = end_idx - start_idx
@@ -112,23 +101,19 @@ else:
     
     idx_partition = [indices for indices in client_indices]
 
-# ============ 新增：验证分配结果 ============
 print("\n分配结果验证:")
 print("-" * 50)
 
-# 统计每个客户端的数据量和类别分布
 for client_id, indices in enumerate(idx_partition):
     client_data = remaining_df.loc[indices]
     
     print(f"客户端 {client_id}:")
     print(f"  总样本数: {len(indices)}")
     
-    # 统计类别
     category_counts = client_data['category'].value_counts()
     print(f"  包含类别数: {len(category_counts)}")
     print(f"  类别分布: {dict(category_counts.head())}")  # 显示前几个类别
     
-    # 检查是否包含所有类别
     missing_categories = set(categories) - set(category_counts.index)
     if missing_categories:
         print(f"  警告: 缺少以下类别: {missing_categories}")
@@ -136,14 +121,12 @@ for client_id, indices in enumerate(idx_partition):
         print(f"  成功: 包含所有{len(categories)}个类别")
     print()
 
-# 全局统计
 print("全局统计:")
 print("-" * 30)
 total_assigned = sum(len(indices) for indices in idx_partition)
 print(f"分配的总样本数: {total_assigned} (原始: {len(remaining_df)})")
 print(f"样本利用率: {total_assigned/len(remaining_df)*100:.2f}%")
 
-# 检查类别分布的均匀性
 print("\n类别分布均匀性检查:")
 for category in categories:
     cat_total = len(remaining_df[remaining_df['category'] == category])
@@ -158,7 +141,7 @@ for category in categories:
     max_count = max(client_counts)
     diff = max_count - min_count
     
-    if diff <= 1:  # 最多相差1个样本
+    if diff <= 1:  
         uniformity = "优秀"
     elif diff <= 2:
         uniformity = "良好"
@@ -167,17 +150,15 @@ for category in categories:
     
     print(f"{category}: 各客户端分配 [{min_count}-{max_count}]，最大差异={diff} ({uniformity})")
 
-# 保存客户端数据
 for client_id, idx in enumerate(idx_partition):
     print(
         "\n生成客户端 {} 的本地训练数据集".format(client_id)
     )
-    # 将索引列表转换为numpy数组以便打乱
     idx_array = np.array(idx)
-    np.random.shuffle(idx_array)  # 原地打乱
+    np.random.shuffle(idx_array)  
     idx_shuffled = idx_array.tolist()
     
-    sub_remaining_df = remaining_df.loc[idx_shuffled]  # 使用打乱后的索引
+    sub_remaining_df = remaining_df.loc[idx_shuffled]  
     sub_remaining_df = sub_remaining_df.reset_index().drop('index', axis=1)
     sub_remaining_df_dic = sub_remaining_df.to_dict(orient='records')
 

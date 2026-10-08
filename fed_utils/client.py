@@ -18,18 +18,14 @@ import itertools
 from fed_utils.adapter import CrossAttentionAdapter, ClientCrossAttentionAdapter
 
 def contrastive_loss(student_feat, teacher_feat, attention_mask, temperature=0.07):
-    """InfoNCE Loss: 确保 Student 特征在空间上靠近 Teacher 特征"""
+    """InfoNCE Loss"""
     batch_size, seq_len, dim = student_feat.shape
 
-    # 1. 展平特征 [B*L, D]
     s_flat = student_feat.view(-1, dim)
     t_flat = teacher_feat.view(-1, dim)
 
-    # 2. 展平 Mask [B*L]
     mask_flat = attention_mask.view(-1)
 
-    # 3. 过滤 Padding (只取有效 Token)
-    # active_indices 是所有非 Pad 的索引
     active_indices = torch.nonzero(mask_flat).squeeze()
 
     if active_indices.numel() == 0:
@@ -38,8 +34,6 @@ def contrastive_loss(student_feat, teacher_feat, attention_mask, temperature=0.0
     s_active = s_flat[active_indices]
     t_active = t_flat[active_indices]
 
-    # 4. 计算 NCE Loss
-    # 每一个 s_active[i] 应该与 t_active[i] 相似，与 t_active[j] 不相似
     s_emb = F.normalize(s_active, dim=-1)
     t_emb = F.normalize(t_active, dim=-1)
 
@@ -51,19 +45,15 @@ def contrastive_loss(student_feat, teacher_feat, attention_mask, temperature=0.0
 def smooth_l1_feature_loss(student_feat, teacher_feat, attention_mask, beta=1.0):
     """
     Smooth L1 Feature Alignment Loss
-    精准匹配特征的方向和绝对尺度，同时免疫异常值梯度爆炸。
     """
-    # 1. 强制转为 FP32 保证数值稳定
     student_feat = student_feat.to(torch.float32)
     teacher_feat = teacher_feat.to(torch.float32)
 
-    # 2. 展平特征 [B*L, D]
     dim = student_feat.shape[-1]
     s_flat = student_feat.view(-1, dim)
     t_flat = teacher_feat.view(-1, dim)
     mask_flat = attention_mask.view(-1)
 
-    # 3. 过滤 Padding，仅提取真实有效的 Token
     active_indices = torch.nonzero(mask_flat).squeeze()
     
     if active_indices.numel() == 0:
@@ -101,12 +91,10 @@ class GeneralClient:
         self.adapter = ClientCrossAttentionAdapter(self.client_dim, server_dim, num_heads=4).to("cpu")
         # self.adapter = CrossAttentionAdapter(self.client_dim, server_dim, bottleneck_ratio=4).to("cpu")
 
-        # 查看总参数量（可训练 + 不可训练）
         total_params = sum(p.numel() for p in self.adapter.parameters())
         print(f"总参数量: {total_params:,}")
         print(f"总参数量（百万）: {total_params/1e6:.2f}M")
 
-        # 查看可训练参数量
         trainable_params = sum(p.numel() for p in self.adapter.parameters() if p.requires_grad)
         print(f"可训练参数: {trainable_params:,}")
         print(f"可训练参数（百万）: {trainable_params/1e6:.2f}M")
@@ -115,7 +103,7 @@ class GeneralClient:
         self.features = {}
         self._register_hook()
         self.local_output_dir = os.path.join(self.output_dir, "local_output_{}".format(self.client_id))
-        self.base_model.gradient_checkpointing_enable() # 开启梯度检查点
+        self.base_model.gradient_checkpointing_enable()
         self.base_model.enable_input_require_grads() 
 
     def _register_hook(self):
@@ -152,7 +140,6 @@ class GeneralClient:
         if self.tokenizer.pad_token_id is not None:
             labels[labels == self.tokenizer.pad_token_id] = -100
         
-        # 将处理好的 labels 放回字典
         result['labels'] = labels
         
         return result
@@ -163,35 +150,30 @@ class GeneralClient:
         self.model.train()
         self.adapter.eval()
 
-        # 1. 定义 TrainingArguments
         train_args = TrainingArguments(
-            per_device_train_batch_size=batch_size, #在每个GPU/CPU上用于训练的实际批次大小
-            gradient_accumulation_steps=4, #梯度累积的步数。
+            per_device_train_batch_size=batch_size, 
+            gradient_accumulation_steps=4, 
             dataloader_pin_memory=False,
-            warmup_steps=0, #不使用学习率预热
+            warmup_steps=0, 
             num_train_epochs=epochs,
             learning_rate=learn_rate,
-            # lr_scheduler_type="constant", #使用恒定学习率
             lr_scheduler_type="cosine",
-            fp16=True, #混合精度训练
+            fp16=True, 
             logging_steps=10,
             optim="adamw_torch",
-            eval_strategy="no", #按训练步数间隔在验证集上评估模型
-            save_strategy="no", #按训练步数间隔来保存模型检查点
+            eval_strategy="no", 
+            save_strategy="no", 
             output_dir=self.local_output_dir,
             save_total_limit=0,
-            load_best_model_at_end=False, #在训练结束时，是否加载在验证集上性能最好的那个模型作为最终模型
+            load_best_model_at_end=False, 
             ddp_find_unused_parameters=False,
-            # group_by_length=False, #是否在构建批次时，将长度相近的样本分组在一起。
             dataloader_drop_last=False,
-            gradient_checkpointing=False, #开启梯度检查点减少显存消耗
-            report_to="none", #不生成runs日志
+            gradient_checkpointing=False, 
+            report_to="none", 
         )
 
-        # 2. 自定义 Data Collator，直接复用你写好的 tokenize 方法
+
         def custom_data_collator(features):
-            # features 是从 dataset 中抽取出的 batch_size 个样本的列表
-            # 处理不同格式的 dataset 返回值 (支持 dataset 返回 dict 或直接返回 str)
             if isinstance(features[0], dict) and "text" in features[0]:
                 texts = [f["text"] for f in features]
             elif isinstance(features[0], str):
@@ -199,8 +181,6 @@ class GeneralClient:
             else:
                 texts =[str(f) for f in features]
 
-            # 复用你写好的 tokenize (内部包含了加 eos, padding 和设置 labels)
-            # 注意: 你的 tokenize 里有 .to('cuda')，Trainer 本身也会做 device 转移，这不冲突
             batch_enc = self.tokenize(texts)
             
             return {
@@ -209,7 +189,6 @@ class GeneralClient:
                 "labels": batch_enc["labels"]
             }
         
-        # 3. 初始化 Trainer
         trainer = Trainer(
             model=self.model,
             args=train_args,
@@ -236,7 +215,6 @@ class GeneralClient:
         server_head = server_node.model.base_model.lm_head
         total_steps = len(dataloader) * epochs
         
-        # 线性调度器（带warmup）
         scheduler = get_linear_schedule_with_warmup(
             optimizer,
             num_warmup_steps=0,
@@ -244,7 +222,6 @@ class GeneralClient:
         )
 
         for ep in range(epochs):
-            # 初始化统计变量
             total_loss = 0
             batch_count = 0
             epoch_loss = 0
@@ -281,15 +258,12 @@ class GeneralClient:
                 # Loss Calculation
                 student_logits = server_head(aligned_feat)
 
-                # 自回归模型需要 Shift: 拿 t 时刻的 logits 去预测 t+1 时刻的 label
                 shift_logits = student_logits[..., :-1, :].contiguous()
                 shift_labels = s_enc['labels'][..., 1:].contiguous()
                 
-                # 计算 CE Loss，PyTorch 的 CrossEntropyLoss 会自动忽略 ignore_index=-100 的 Padding 部分
                 loss_fct = nn.CrossEntropyLoss(ignore_index=-100)
                 loss_ce = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
 
-                # 物理隔离 Padding
                 valid_mask = (server_mask == 1)
                 v_s_logits = student_logits[valid_mask]
                 v_t_logits = teacher_logits[valid_mask]
@@ -305,21 +279,17 @@ class GeneralClient:
                 optimizer.step()
                 scheduler.step()
 
-                # 累加loss
                 total_loss += loss.item()
                 batch_count += 1
                 epoch_loss += loss.item()
                 
-                # 每10个batch输出一次平均loss
                 if (i + 1) % 30 == 0:
                     avg_loss = total_loss / batch_count
                     print(f"\n Epoch {ep+1}, Batch {i+1}: Average loss = {avg_loss:.4f}")
                     
-                    # 重置统计
                     total_loss = 0
                     batch_count = 0
 
-                # 更新进度条信息
                 batch_pbar.set_postfix({
                     'loss': f'{loss.item():.4f}',
                     'ce_loss': f'{(loss_ce.item())*0.5:.4f}',
@@ -336,7 +306,6 @@ class GeneralClient:
         del dataloader
         del optimizer
         gc.collect()
-    # --- 显存管理核心方法 ---
 
     def to_gpu(self):
         """将模型移动到 GPU"""
@@ -356,8 +325,7 @@ class GeneralClient:
         self.model.to("cpu")
         self.adapter.to("cpu")
         
-        # 强制清理
-        self.features = {} # 清空缓存的特征
+        self.features = {} 
         torch.cuda.empty_cache()
         gc.collect()
 
@@ -375,8 +343,6 @@ class GeneralClient:
         adapter_path = os.path.join(self.local_output_dir, "adapter.bin")
          
         if os.path.exists(adapter_path):
-            # 加载 Adapter 权重
-            # 注意：需先确保 adapter 在 CPU 上，加载完再 to_gpu
             print(f"[{self.client_id}] adapter loaded.")
             self.adapter.load_state_dict(torch.load(adapter_path, map_location="cpu"))
         
@@ -384,13 +350,7 @@ class GeneralClient:
         print(f"[{self.client_id}] State loaded.")
 
     def merge_model(self):
-        """
-        完成当前轮训练后调用：
-        1. 合并 LoRA 到基础模型
-        2. 保存合并后的模型
-        3. 用合并后的权重替换 self.base_model
-        4. 重新包装一个新的 PeftModel
-        """
+        """合并 LoRA 到基础模型"""
         print(f"[Client {self.client_id}] Merging LoRA and resetting adapter...")
 
 
@@ -400,7 +360,6 @@ class GeneralClient:
 
         self._register_hook()
 
-        # 可选：清理旧的特征缓存
         self.features = {}
         torch.cuda.empty_cache()
         gc.collect()
@@ -415,5 +374,4 @@ class GeneralClient:
                                     load_in_8bit=False)
         print('finish save')
         
-        # 可选：显式删除引用以释放显存
         del merged_model

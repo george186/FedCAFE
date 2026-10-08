@@ -64,8 +64,8 @@ class AlpacaDataset(Dataset):
         采用标准的 Alpaca 格式。
         """
         instruction = item.get("instruction", "")
-        input_text = item.get("input", "")  # 注意：Alpaca使用"input"而非"context"
-        output = item.get("output", "")    # 注意：Alpaca使用"output"而非"response"
+        input_text = item.get("input", "")  
+        output = item.get("output", "")    
 
         if input_text and len(input_text.strip()) > 0:
             prompt = f"Below is an instruction that describes a task, paired with an input that provides further context. Write a response that appropriately completes the request.\n\n### Instruction:\n{instruction}\n\n### Input:\n{input_text}\n\n### Response:\n{output}"
