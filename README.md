@@ -48,3 +48,22 @@ Each communication round proceeds as follows: local client self-training → cli
 - The model paths in `heter_main.py` are hard-coded defaults; change them to your own local paths before running.
 - The repository already contains the partitioned `data/4` and `data/8`, so training can start directly without regenerating them.
 - This repository currently ships without an open-source license.
+
+## Citation
+
+If you find this work useful, please cite:
+
+```bibtex
+@article{qiao2026fedcafe,
+  title   = {FedCAFE: A federated cross-attention feature exchange framework for heterogeneous large language model fine-tuning},
+  author  = {Qiao, Zhi and Zhang, Pengfei and Xue, Junxiao},
+  journal = {Expert Systems with Applications},
+  volume  = {334},
+  pages   = {134508},
+  year    = {2026},
+  issn    = {0957-4174},
+  doi     = {10.1016/j.eswa.2026.134508}
+}
+```
+
+Zhi Qiao, Pengfei Zhang, Junxiao Xue. FedCAFE: A federated cross-attention feature exchange framework for heterogeneous large language model fine-tuning. *Expert Systems with Applications*, 334:134508, 2026. DOI: [10.1016/j.eswa.2026.134508](https://doi.org/10.1016/j.eswa.2026.134508)
