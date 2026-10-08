@@ -65,5 +65,3 @@ If you find this work useful, please cite:
   doi     = {10.1016/j.eswa.2026.134508}
 }
 ```
-
-Zhi Qiao, Pengfei Zhang, Junxiao Xue. FedCAFE: A federated cross-attention feature exchange framework for heterogeneous large language model fine-tuning. *Expert Systems with Applications*, 334:134508, 2026. DOI: [10.1016/j.eswa.2026.134508](https://doi.org/10.1016/j.eswa.2026.134508)
